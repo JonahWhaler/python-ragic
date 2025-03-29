@@ -168,8 +168,6 @@ class DataClient:
         tab_name: str,
         table_name: str,
         conditions: list | None = None,
-        offset: int = 0,
-        limit: int = 100,
         include_subtable: bool = False,
     ):
         """
@@ -183,13 +181,10 @@ class DataClient:
             table_name (str): The name of the table to query.
             conditions (list, optional): A list of filter conditions (each as a tuple: field_name, operator, field_value).
                 Defaults to None.
-            offset (int, optional): The record offset for pagination. Defaults to 0.
-            limit (int, optional): The maximum number of records to retrieve. Defaults to 100.
             include_subtable (bool, optional): Flag indicating whether to include subtable data. Defaults to False.
         """
-        tab_identifier = self.structure["tabs"][tab_name]["identifier"]
-        table_identifier = self.tables(tab_name)[table_name]["identifier"]
-        query_string = f"{tab_identifier}/{table_identifier}?v={self.version}&info=true&listing=true&subtables={1 if include_subtable else 0}&limit={limit}&offset={offset}"
+        # Default query setup
+        query_string = f"v={self.version}&info=true&listing=true&subtables={1 if include_subtable else 0}"
 
         if conditions is not None:
             query_string = query_string + DataClient._compile(
@@ -210,9 +205,19 @@ class DataClient:
 
     @property
     def query_string(self) -> Optional[str]:
+        """
+        Get the constructed query string.
+
+        Returns:
+            Optional[str]: The constructed query string, or None if no query has been defined.
+        """
         return self.__query_string
 
-    def get_dataframe(self) -> Optional[pd.DataFrame]:
+    def get_dataframe(
+        self,
+        offset: int = 0,
+        limit: int = 100,
+    ) -> Optional[pd.DataFrame]:
         """
         Execute the defined query and return the results as a pandas DataFrame.
 
@@ -220,6 +225,10 @@ class DataClient:
         processes the returned JSON data, and converts it into a DataFrame.
         Numerical columns with empty values are converted to pd.NA and cast to float32,
         while text columns replace empty strings with "Missing Value".
+
+        Args:
+            offset (int, optional): The record offset for pagination. Defaults to 0.
+            limit (int, optional): The maximum number of records to retrieve. Defaults to 100.
 
         Returns:
             Optional[pd.DataFrame]: A DataFrame containing the retrieved data, or None if the response is empty
@@ -238,7 +247,12 @@ class DataClient:
         ):
             raise ValueError("Query not ready!!!")
 
-        URL = f"{self.base_url}/{self.namespace}/{self.query_string}"
+        tab_identifier = self.structure["tabs"][self.active_tab]["identifier"]
+        table_identifier = self.tables(self.active_tab)[self.active_table]["identifier"]
+        RESOURCE = f"{tab_identifier}/{table_identifier}"
+        PAGINATION = f"limit={limit}&offset={offset}"
+
+        URL = f"{self.base_url}/{self.namespace}/{RESOURCE}?{self.query_string}&{PAGINATION}"
         HEADERS = self.headers()
         logger.info("URL: %s", URL)
         logger.info("HEADERS: %s", HEADERS)

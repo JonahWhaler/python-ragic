@@ -22,11 +22,14 @@ if __name__ == "__main__":
         structure_path="./config/structure.yaml",
     )
     # Parameters
-    TAB_NAME = "##"
-    TABLE_NAME = "##"
+    TAB_NAME = os.environ.get("TARGET_TAB")
+    TABLE_NAME = os.environ.get("TARGET_TABLE")
+
+    assert TAB_NAME is not None and TABLE_NAME is not None
+
     conditions = [
-        ("FIELD 1", QueryFilterType.CONTAINS, "FIELD VALUE 1"),
-        ("FIELD 2", QueryFilterType.EQUAL, "FIELD VALUE 2"),
+        # ("FIELD 1", QueryFilterType.CONTAINS, "FIELD VALUE 1"),
+        # ("FIELD 2", QueryFilterType.EQUAL, "FIELD VALUE 2"),
     ]
     offset = 0
     LIMIT = 1000
@@ -36,13 +39,9 @@ if __name__ == "__main__":
         while True:
             # time.sleep(0.2)  # Prevent Rate Limit
             client.define_query(
-                tab_name=TAB_NAME,
-                table_name=TABLE_NAME,
-                conditions=conditions,
-                offset=offset,
-                limit=LIMIT,
+                tab_name=TAB_NAME, table_name=TABLE_NAME, conditions=conditions
             )
-            df = client.get_dataframe()
+            df = client.get_dataframe(offset=offset, limit=LIMIT)
             if df is not None and df.shape[0] > 0:
                 main_df = pd.concat([main_df, df], axis=0, ignore_index=True)
                 # df.info()
@@ -52,7 +51,7 @@ if __name__ == "__main__":
             else:
                 break
         main_df.info()
-        main_df.to_csv("./output.csv", index=False)
+        main_df.to_csv("./output/output.csv", index=False)
     except Exception as e:
         logger.error("Main loop error: %s", e)
         logger.warning("Offset: %s", offset)
