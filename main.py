@@ -32,11 +32,10 @@ if __name__ == "__main__":
 
     TAB_NAME = "PB"
     TABLE_NAME = "Donations"
-    # [("Race", OperandType.EQUALS, "Others")]
     data_dict = client.load(
         TAB_NAME,
         TABLE_NAME,
-        conditions=None,
+        conditions=[("Race", OperandType.EQUALS, "Others")],
         offset=0,
         size=10,
         other_get_params=OtherGETParameters(subtables=False, listing=False),
