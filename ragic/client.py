@@ -354,3 +354,48 @@ class RagicAPIClient:
 
         df.to_csv(output_path, index=False)
         return None
+    def load_file(self, file_identifier: str, output_path: str) -> None:
+        """
+        Load a file from the Ragic server and save it to the specified output path.
+
+        Args:
+            file_identifier (str): The identifier of the file to be loaded.
+            output_path (str): The path where the file will be saved.
+
+        Raises:
+            ValueError: If the file_identifier is not provided.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+        """
+        _timeout = 300
+        if file_identifier is None:
+            raise ValueError("File identifier must be provided")
+
+        file_identifier = file_identifier.strip()
+        if file_identifier == "":
+            raise ValueError("File identifier cannot be empty")
+
+        try:
+            with httpx.Client(
+                http2=True, headers=self.headers, timeout=_timeout
+            ) as client:
+                base_url = f"{self.base_url}/sims/file.jsp"
+                target_url = f"{base_url}?a={self.namespace}&f={file_identifier}"
+                response = client.get(target_url)
+
+                response.raise_for_status()
+
+                with open(output_path, "wb") as f:
+                    f.write(response.content)
+                    logger.info("File saved to %s", output_path)
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
