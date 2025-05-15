@@ -6,6 +6,7 @@ import os
 from typing import Any, Optional
 import logging
 import httpx
+import pandas as pd
 
 from .types import (
     OperandType,
@@ -281,3 +282,75 @@ class RagicAPIClient:
             processed_data[index] = _value_dict
 
         return processed_data
+
+    def load_to_dataframe(
+        self,
+        tab_name: str,
+        table_name: str,
+        conditions: Optional[list[tuple[str, OperandType, Any]]] = None,
+        offset: int = 0,
+        size: int = 100,
+        other_get_params: Optional[OtherGETParameters] = None,
+        ordering: Optional[Ordering] = None,
+    ) -> Optional[pd.DataFrame]:
+        data_dict = self.load(
+            tab_name,
+            table_name,
+            conditions=conditions,
+            offset=offset,
+            size=size,
+            other_get_params=other_get_params,
+            ordering=ordering,
+        )
+
+        if data_dict is None:
+            return None
+
+        columns = []
+        for _, value_dict in data_dict.items():
+            for field_name in value_dict.keys():
+                if field_name not in columns:
+                    columns.append(field_name)
+
+        _dict = {}
+        _index = []
+        for column in columns:
+            _dict[column] = []
+
+        for index, value_dict in data_dict.items():
+            _index.append(index)
+            for column in columns:
+                if column in value_dict:
+                    _dict[column].append(value_dict[column])
+                else:
+                    _dict[column].append(None)
+
+        df = pd.DataFrame(_dict, index=_index, columns=columns)
+        return df
+
+    def load_to_csv(
+        self,
+        tab_name: str,
+        table_name: str,
+        conditions: Optional[list[tuple[str, OperandType, Any]]] = None,
+        offset: int = 0,
+        size: int = 100,
+        other_get_params: Optional[OtherGETParameters] = None,
+        ordering: Optional[Ordering] = None,
+        output_path: str = "output.csv",
+    ) -> None:
+        df = self.load_to_dataframe(
+            tab_name,
+            table_name,
+            conditions=conditions,
+            offset=offset,
+            size=size,
+            other_get_params=other_get_params,
+            ordering=ordering,
+        )
+
+        if df is None:
+            return None
+
+        df.to_csv(output_path, index=False)
+        return None
