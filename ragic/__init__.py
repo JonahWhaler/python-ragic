@@ -3,7 +3,13 @@ Ragic API Client
 """
 
 from .client import RagicAPIClient
-from .types import OperandType, Ordering, OrderingType, OtherGETParameters
+from .types import (
+    OperandType,
+    Ordering,
+    OrderingType,
+    OtherGETParameters,
+    CreateUpdateParameters,
+)
 
 __all__ = [
     "RagicAPIClient",
@@ -11,4 +17,5 @@ __all__ = [
     "Ordering",
     "OrderingType",
     "OtherGETParameters",
+    "CreateUpdateParameters",
 ]
