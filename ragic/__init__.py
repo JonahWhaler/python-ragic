@@ -1,4 +1,14 @@
-from .main import DataClient, QueryFilterType
+"""
+Ragic API Client
+"""
 
+from .client import RagicAPIClient
+from .types import OperandType, Ordering, OrderingType, OtherGETParameters
 
-__all__ = ["DataClient", "QueryFilterType"]
+__all__ = [
+    "RagicAPIClient",
+    "OperandType",
+    "Ordering",
+    "OrderingType",
+    "OtherGETParameters",
+]
