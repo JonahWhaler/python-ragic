@@ -1,0 +1,73 @@
+tabs:
+    Sales Management System:
+        tab_id: 7
+        tables:
+            customer:
+                table_id: 1
+                fields:
+                    customer_id:
+                        field_id: 1009788
+                        field_type: text
+
+                    name:
+                        field_id: 1009789
+                        field_type: text
+
+                    gender:
+                        field_id: 1009790
+                        field_type: selection
+                        allow_user_add_new_options: false
+
+                    email:
+                        field_id: 1009791
+                        field_type: text:email
+
+            sales:
+                table_id: 2
+                fields:
+                    product_id:
+                        field_id: 1009792
+                        field_type: selection
+                        allow_user_add_new_options: true
+                        source_table: customer
+
+                    quantity:
+                        field_id: 1009793
+                        field_type: number
+
+                    discount:
+                        field_id: 1009794
+                        field_type: number
+
+                    total_price:
+                        field_id: 1009795
+                        field_type: number
+
+                    customer_id:
+                        field_id: 1009796
+                        field_type: text
+                        source_table: customer
+
+            product:
+                table_id: 3
+                fields:
+                    product_id:
+                        field_id: 1009797
+                        field_type: text
+                        
+                    product_name:
+                        field_id: 1009798
+                        field_type: text
+
+                    product_price:
+                        field_id: 1009799
+                        field_type: number
+
+                    product_description:
+                        field_id: 1009800
+                        field_type: rich text
+
+                    product_category:
+                        field_id: 1009801
+                        field_type: multiple select
+                        allow_user_add_new_options: true
