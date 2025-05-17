@@ -199,3 +199,59 @@ class Ordering:
 
         self.order_by = order_by
         self.order = order
+
+
+class CreateUpdateParameters:
+    """
+    Class to handle parameters for creating or updating data in Ragic.
+    """
+
+    def __init__(
+        self,
+        doFormula: bool = True,
+        doDefaultValue: bool = True,
+        doLinkLoad: Optional[str] = None,
+        doWorkflow: bool = False,
+        notifiation: bool = True,
+        checkLock: bool = True,
+    ):
+        """
+        Initialize the parameters for creating or updating data in Ragic.
+
+        Args:
+            doFormula (bool): Whether to apply formulas.
+            doDefaultValue (bool): Whether to apply default values.
+            doLinkLoad (Optional[str]): Whether to load linked data. [true, first]
+            doWorkflow (bool): Whether to apply workflow rules.
+            notifiation (bool): Whether to send notifications.
+            checkLock (bool): Whether to check for locks.
+        """
+        self.doFormula = doFormula
+        self.doDefaultValue = doDefaultValue
+        self.doLinkLoad = doLinkLoad
+        self.doWorkflow = doWorkflow
+        self.notifiation = notifiation
+        self.checkLock = checkLock
+
+    def get_params_string(self) -> str:
+        """
+        Get the parameters as a query string.
+
+        Returns:
+            output (str): The parameters as a query string.
+        """
+        parts = []
+        if self.doFormula:
+            parts.append("doFormula=true")
+        if self.doDefaultValue:
+            parts.append("doDefaultValue=true")
+        if self.doLinkLoad:
+            parts.append(f"doLinkLoad={self.doLinkLoad}")
+        if self.doWorkflow:
+            parts.append("doWorkflow=true")
+        if not self.notifiation:
+            parts.append("notifiation=false")
+        if self.checkLock:
+            parts.append("checkLock=true")
+
+        return "&".join(parts)

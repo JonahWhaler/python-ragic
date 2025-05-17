@@ -6,12 +6,14 @@ import os
 from typing import Any, Optional
 import logging
 import httpx
+import pandas as pd
 
 from .types import (
     OperandType,
     RagicStructure,
     OtherGETParameters,
     Ordering,
+    CreateUpdateParameters,
 )
 
 
@@ -41,6 +43,7 @@ class RagicAPIClient:
         base_url: Optional[str],
         namespace: Optional[str],
         api_key: Optional[str],
+        account: Optional[str],
         version: int,
         structure_path: str,
     ):
@@ -68,6 +71,8 @@ class RagicAPIClient:
             namespace = os.getenv("RAGIC_NAMESPACE")
         if api_key is None:
             api_key = os.getenv("RAGIC_API_KEY")
+        if account is None:
+            account = os.getenv("RAGIC_ACCOUNT")
 
         if base_url is None or namespace is None or api_key is None:
             raise ValueError("RAGIC_URL, RAGIC_NAMESPACE and RAGIC_API_KEY must be set")
@@ -75,6 +80,7 @@ class RagicAPIClient:
         self.base_url = base_url
         self.namespace = namespace
         self.api_key = api_key
+        self.account = account
         self.version = version
         self.structure: RagicStructure = RagicStructure(structure_path)
 
@@ -281,3 +287,316 @@ class RagicAPIClient:
             processed_data[index] = _value_dict
 
         return processed_data
+
+    def load_to_dataframe(
+        self,
+        tab_name: str,
+        table_name: str,
+        conditions: Optional[list[tuple[str, OperandType, Any]]] = None,
+        offset: int = 0,
+        size: int = 100,
+        other_get_params: Optional[OtherGETParameters] = None,
+        ordering: Optional[Ordering] = None,
+    ) -> Optional[pd.DataFrame]:
+        data_dict = self.load(
+            tab_name,
+            table_name,
+            conditions=conditions,
+            offset=offset,
+            size=size,
+            other_get_params=other_get_params,
+            ordering=ordering,
+        )
+
+        if data_dict is None:
+            return None
+
+        columns = []
+        for _, value_dict in data_dict.items():
+            for field_name in value_dict.keys():
+                if field_name not in columns:
+                    columns.append(field_name)
+
+        _dict = {}
+        _index = []
+        for column in columns:
+            _dict[column] = []
+
+        for index, value_dict in data_dict.items():
+            _index.append(index)
+            for column in columns:
+                if column in value_dict:
+                    _dict[column].append(value_dict[column])
+                else:
+                    _dict[column].append(None)
+
+        df = pd.DataFrame(_dict, index=_index, columns=columns)
+        return df
+
+    def load_to_csv(
+        self,
+        tab_name: str,
+        table_name: str,
+        conditions: Optional[list[tuple[str, OperandType, Any]]] = None,
+        offset: int = 0,
+        size: int = 100,
+        other_get_params: Optional[OtherGETParameters] = None,
+        ordering: Optional[Ordering] = None,
+        output_path: str = "output.csv",
+    ) -> None:
+        df = self.load_to_dataframe(
+            tab_name,
+            table_name,
+            conditions=conditions,
+            offset=offset,
+            size=size,
+            other_get_params=other_get_params,
+            ordering=ordering,
+        )
+
+        if df is None:
+            return None
+
+        df.to_csv(output_path, index=False)
+        return None
+
+    def write_new_data(
+        self,
+        tab_name: str,
+        table_name: str,
+        data: dict,
+        params: Optional[CreateUpdateParameters] = None,
+    ):
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}?api=v={self.version}"
+
+        if params:
+            target_url += "&" + params.get_params_string()
+
+        payload = {}
+        for field_name, value in data.items():
+            if field_name.startswith("_"):
+                continue
+
+            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
+            payload[field_id] = value
+
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                response = client.post(target_url, json=payload)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
+    def modify_data(
+        self,
+        tab_name: str,
+        table_name: str,
+        record_id: int,
+        data: dict,
+        params: Optional[CreateUpdateParameters] = None,
+    ) -> None:
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        if params:
+            target_url += "&" + params.get_params_string()
+
+        payload = {}
+        for field_name, value in data.items():
+            if field_name.startswith("_"):
+                continue
+
+            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
+            payload[field_id] = value
+
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                response = client.put(target_url, json=payload)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
+    def load_file(self, file_identifier: str, output_path: str) -> None:
+        """
+        Load a file from the Ragic server and save it to the specified output path.
+
+        Args:
+            file_identifier (str): The identifier of the file to be loaded.
+            output_path (str): The path where the file will be saved.
+
+        Raises:
+            ValueError: If the file_identifier is not provided.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+        """
+        _timeout = 300
+        if file_identifier is None:
+            raise ValueError("File identifier must be provided")
+
+        file_identifier = file_identifier.strip()
+        if file_identifier == "":
+            raise ValueError("File identifier cannot be empty")
+
+        try:
+            with httpx.Client(
+                http2=True, headers=self.headers, timeout=_timeout
+            ) as client:
+                base_url = f"{self.base_url}/sims/file.jsp"
+                target_url = f"{base_url}?a={self.namespace}&f={file_identifier}"
+                response = client.get(target_url)
+
+                response.raise_for_status()
+
+                with open(output_path, "wb") as f:
+                    f.write(response.content)
+                    logger.info("File saved to %s", output_path)
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
+    def delete_data(self, tab_name: str, table_name: str, record_id: int):
+        """
+        Delete a specific record from a table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to delete data from.
+            record_id (int): The ID of the record to delete.
+
+        Returns:
+            response (dict): The response from the API after deletion.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+        """
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                response = client.delete(target_url)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
+    def get_data(self, tab_name: str, table_name: str, record_id: int):
+        """
+        Retrieve a specific record from a table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to retrieve data from.
+            record_id (int): The ID of the record to retrieve.
+
+        Returns:
+            response (dict): The data of the specified record.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+        """
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                response = client.get(target_url)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
