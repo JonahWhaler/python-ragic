@@ -504,3 +504,99 @@ class RagicAPIClient:
                 stack_info=True,
             )
             raise
+
+    def delete_data(self, tab_name: str, table_name: str, record_id: int):
+        """
+        Delete a specific record from a table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to delete data from.
+            record_id (int): The ID of the record to delete.
+
+        Returns:
+            response (dict): The response from the API after deletion.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+        """
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                response = client.delete(target_url)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
+    def get_data(self, tab_name: str, table_name: str, record_id: int):
+        """
+        Retrieve a specific record from a table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to retrieve data from.
+            record_id (int): The ID of the record to retrieve.
+
+        Returns:
+            response (dict): The data of the specified record.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+        """
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                response = client.get(target_url)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
