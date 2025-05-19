@@ -601,8 +601,71 @@ class RagicAPIClient:
         try:
             with httpx.Client(http2=True, headers=self.headers) as client:
                 response = client.get(target_url)
-                response.raise_for_status()
-                return response.json()
+    def upload_file(
+        self,
+        tab_name: str,
+        table_name: str,
+        record_id: int,
+        field_name: str,
+        file_path: str,
+    ):
+        """
+        Upload a file to a specific record in a table in the Ragic database.
+
+        This method adds a file to a specific field in a record, not replacing the entire field.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to upload data to.
+            record_id (int): The ID of the record to upload the file to.
+            field_name (str): The name of the field where the file will be uploaded.
+            file_path (str): The path to the file to be uploaded.
+
+        Returns:
+            response (dict): The response from the API after uploading the file.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            ValueError: If the field is not an attachment field.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+            FileExistsError: If the specified file does not exist.
+            IsADirectoryError: If the specified path is a directory instead of a file.
+        """
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        if not os.path.exists(file_path):
+            raise FileExistsError(f"File {file_path} does not exist")
+
+        if not os.path.isfile(file_path):
+            raise IsADirectoryError(f"Path {file_path} is not a file")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        if (
+            self.structure.get_field_type(tab_name, table_name, field_name)
+            != "attachment"
+        ):
+            raise ValueError(f"Field {field_name} is not an attachment field")
+
+        field_id = self.structure.get_field_id(tab_name, table_name, field_name)
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                with open(file_path, "rb") as file:
+                    files = {field_id: file.read()}
+                    response = client.put(target_url, files=files)
+                    response.raise_for_status()
+                    return response.json()
         except httpx.RequestError as req_err:
             logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
             raise
