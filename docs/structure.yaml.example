@@ -22,6 +22,10 @@ tabs:
                         field_id: 1009791
                         field_type: text:email
 
+                    profile picture:
+                        field_id: 1009792
+                        field_type: attachment
+
             sales:
                 table_id: 2
                 fields:
