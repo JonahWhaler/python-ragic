@@ -5,6 +5,7 @@ RagicAPIClient.py
 import os
 from typing import Any, Optional
 import logging
+import mimetypes
 import httpx
 import pandas as pd
 
@@ -410,6 +411,30 @@ class RagicAPIClient:
         data: dict,
         params: Optional[CreateUpdateParameters] = None,
     ):
+        """
+        Write new data to a specific table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to write data to.
+            data (dict): The data to be written to the table.
+            params (Optional[CreateUpdateParameters], optional):
+                Additional parameters for the request.
+                Defaults to None.
+
+        Returns:
+            response (dict): The response from the API after writing the data.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+
+        **Notes**:
+        - **Upload Files**:
+            - If the field type is "attachment", the file path should be provided in the data dictionary.
+            - Multiple files can be uploaded by providing a list of file paths.
+        """
         # Validate input parameters
         if tab_name not in self.structure.get_tabs():
             raise ValueError(f"Tab {tab_name} not found in structure")
@@ -457,6 +482,38 @@ class RagicAPIClient:
         data: dict,
         params: Optional[CreateUpdateParameters] = None,
     ) -> None:
+        """
+        Modify an existing record in a specific table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to modify data in.
+            record_id (int): The ID of the record to modify.
+            data (dict): The data to be modified in the record.
+            params (Optional[CreateUpdateParameters], optional):
+                Additional parameters for the request.
+                Defaults to None.
+
+        Returns:
+
+            response (dict): The response from the API after modifying the data.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+
+        **Notes**:
+            - **Upload Files**:
+                - If the field type is "attachment", the file path should be provided in the data dictionary.
+                - Multiple files can be uploaded by providing a list of file paths.
+            - **Replace Files**:
+                - Submitting a file to a attachment field does not replace the existing file,
+                but adds a new file to the field.
+                - To replace the existing file, you first need to submit a blank value to the
+                corresponding field (empty string or None).
+                - Then, use the upload_file method to upload the new file.
+        """
         # Validate input parameters
         if tab_name not in self.structure.get_tabs():
             raise ValueError(f"Tab {tab_name} not found in structure")
@@ -556,9 +613,11 @@ class RagicAPIClient:
             )
             raise
 
-    def delete_data(self, tab_name: str, table_name: str, record_id: int):
+    def delete_data(self, tab_name: str, table_name: str, record_id: int) -> dict:
         """
         Delete a specific record from a table in the Ragic database.
+
+        Attempt to delete a non-existing record will not raise an error.
 
         Args:
             tab_name (str): The name of the tab containing the table.
@@ -608,13 +667,16 @@ class RagicAPIClient:
         """
         Retrieve a specific record from a table in the Ragic database.
 
+        Attempt to retrieve a non-existing record will not raise an error.
+
         Args:
             tab_name (str): The name of the tab containing the table.
             table_name (str): The name of the table to retrieve data from.
             record_id (int): The ID of the record to retrieve.
 
         Returns:
-            response (dict): The data of the specified record.
+            response (dict):
+            The data of the specified record. Empty dict if not found.
 
         Raises:
             ValueError: If the specified tab or table does not exist.
@@ -638,6 +700,20 @@ class RagicAPIClient:
         try:
             with httpx.Client(http2=True, headers=self.headers) as client:
                 response = client.get(target_url)
+                response.raise_for_status()
+                return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
     def upload_file(
         self,
         tab_name: str,
