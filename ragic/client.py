@@ -427,17 +427,14 @@ class RagicAPIClient:
         if params:
             target_url += "&" + params.get_params_string()
 
-        payload = {}
-        for field_name, value in data.items():
-            if field_name.startswith("_"):
-                continue
-
-            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
-            payload[field_id] = value
+        payload, files = self.prepare_payload(tab_name, table_name, data)
 
         try:
             with httpx.Client(http2=True, headers=self.headers) as client:
-                response = client.post(target_url, json=payload)
+                if files:
+                    response = client.post(target_url, files=files, data=payload)
+                else:
+                    response = client.post(target_url, data=payload)
                 response.raise_for_status()
                 return response.json()
         except httpx.RequestError as req_err:
@@ -477,17 +474,14 @@ class RagicAPIClient:
         if params:
             target_url += "&" + params.get_params_string()
 
-        payload = {}
-        for field_name, value in data.items():
-            if field_name.startswith("_"):
-                continue
-
-            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
-            payload[field_id] = value
+        payload, files = self.prepare_payload(tab_name, table_name, data)
 
         try:
             with httpx.Client(http2=True, headers=self.headers) as client:
-                response = client.put(target_url, json=payload)
+                if files:
+                    response = client.put(target_url, files=files, data=payload)
+                else:
+                    response = client.put(target_url, data=payload)
                 response.raise_for_status()
                 return response.json()
         except httpx.RequestError as req_err:
