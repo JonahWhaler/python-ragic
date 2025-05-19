@@ -5,6 +5,7 @@ RagicAPIClient.py
 import os
 from typing import Any, Optional
 import logging
+import mimetypes
 import httpx
 import pandas as pd
 
@@ -360,6 +361,49 @@ class RagicAPIClient:
         df.to_csv(output_path, index=False)
         return None
 
+    def prepare_payload(self, tab_name: str, table_name: str, data: dict):
+        """
+        Prepare the payload and files for the API request.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to write data to.
+            data (dict): The data to be written to the table.
+
+        Returns:
+            payload (dict): The payload for the API request.
+            files (list): A list of tuples containing file information for attachment fields.
+
+        **Notes**:
+        - Consider blank value (None or empty string) as an intention to clear the field.
+        """
+        payload = {}
+        files = []
+        for field_name, value in data.items():
+            if field_name.startswith("_"):
+                continue
+
+            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
+            field_type = self.structure.get_field_type(tab_name, table_name, field_name)
+            if field_type != "attachment" or value is None or value == "":
+                payload[field_id] = value
+            else:
+                if not isinstance(value, list):
+                    value = [value]
+                for file_path in value:
+                    mime_type, _ = mimetypes.guess_type(file_path)
+                    if mime_type is None:
+                        mime_type = "application/octet-stream"
+                    with open(file_path, "rb") as f:
+                        files.append(
+                            (
+                                field_id,
+                                (os.path.basename(file_path), f.read(), mime_type),
+                            )
+                        )
+
+        return payload, files
+
     def write_new_data(
         self,
         tab_name: str,
@@ -367,6 +411,30 @@ class RagicAPIClient:
         data: dict,
         params: Optional[CreateUpdateParameters] = None,
     ):
+        """
+        Write new data to a specific table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to write data to.
+            data (dict): The data to be written to the table.
+            params (Optional[CreateUpdateParameters], optional):
+                Additional parameters for the request.
+                Defaults to None.
+
+        Returns:
+            response (dict): The response from the API after writing the data.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+
+        **Notes**:
+        - **Upload Files**:
+            - If the field type is "attachment", the file path should be provided in the data dictionary.
+            - Multiple files can be uploaded by providing a list of file paths.
+        """
         # Validate input parameters
         if tab_name not in self.structure.get_tabs():
             raise ValueError(f"Tab {tab_name} not found in structure")
@@ -384,17 +452,14 @@ class RagicAPIClient:
         if params:
             target_url += "&" + params.get_params_string()
 
-        payload = {}
-        for field_name, value in data.items():
-            if field_name.startswith("_"):
-                continue
-
-            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
-            payload[field_id] = value
+        payload, files = self.prepare_payload(tab_name, table_name, data)
 
         try:
             with httpx.Client(http2=True, headers=self.headers) as client:
-                response = client.post(target_url, json=payload)
+                if files:
+                    response = client.post(target_url, files=files, data=payload)
+                else:
+                    response = client.post(target_url, data=payload)
                 response.raise_for_status()
                 return response.json()
         except httpx.RequestError as req_err:
@@ -417,6 +482,38 @@ class RagicAPIClient:
         data: dict,
         params: Optional[CreateUpdateParameters] = None,
     ) -> None:
+        """
+        Modify an existing record in a specific table in the Ragic database.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to modify data in.
+            record_id (int): The ID of the record to modify.
+            data (dict): The data to be modified in the record.
+            params (Optional[CreateUpdateParameters], optional):
+                Additional parameters for the request.
+                Defaults to None.
+
+        Returns:
+
+            response (dict): The response from the API after modifying the data.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+
+        **Notes**:
+            - **Upload Files**:
+                - If the field type is "attachment", the file path should be provided in the data dictionary.
+                - Multiple files can be uploaded by providing a list of file paths.
+            - **Replace Files**:
+                - Submitting a file to a attachment field does not replace the existing file,
+                but adds a new file to the field.
+                - To replace the existing file, you first need to submit a blank value to the
+                corresponding field (empty string or None).
+                - Then, use the upload_file method to upload the new file.
+        """
         # Validate input parameters
         if tab_name not in self.structure.get_tabs():
             raise ValueError(f"Tab {tab_name} not found in structure")
@@ -434,17 +531,14 @@ class RagicAPIClient:
         if params:
             target_url += "&" + params.get_params_string()
 
-        payload = {}
-        for field_name, value in data.items():
-            if field_name.startswith("_"):
-                continue
-
-            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
-            payload[field_id] = value
+        payload, files = self.prepare_payload(tab_name, table_name, data)
 
         try:
             with httpx.Client(http2=True, headers=self.headers) as client:
-                response = client.put(target_url, json=payload)
+                if files:
+                    response = client.put(target_url, files=files, data=payload)
+                else:
+                    response = client.put(target_url, data=payload)
                 response.raise_for_status()
                 return response.json()
         except httpx.RequestError as req_err:
@@ -459,9 +553,18 @@ class RagicAPIClient:
             )
             raise
 
-    def load_file(self, file_identifier: str, output_path: str) -> None:
+    def download_file(self, file_identifier: str, output_path: str) -> None:
         """
-        Load a file from the Ragic server and save it to the specified output path.
+        Download a file from the Ragic server and save it to the specified output path.
+
+        ## File Not Found:
+
+        - **Image**: If response.content is less than 43 bytes,
+        it indicates that the file identifier is invalid or the file does not exist.
+
+        - **Non-image**:
+        If the system fails to locate the file,
+        "File identifier is invalid or file does not exist" will be raised.
 
         Args:
             file_identifier (str): The identifier of the file to be loaded.
@@ -487,8 +590,13 @@ class RagicAPIClient:
                 base_url = f"{self.base_url}/sims/file.jsp"
                 target_url = f"{base_url}?a={self.namespace}&f={file_identifier}"
                 response = client.get(target_url)
-
                 response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                content_length = len(response.content)
+                if content_type.startswith("image/") and content_length <= 43:
+                    raise ValueError(
+                        "File identifier is invalid or file does not exist"
+                    )
 
                 with open(output_path, "wb") as f:
                     f.write(response.content)
@@ -505,9 +613,11 @@ class RagicAPIClient:
             )
             raise
 
-    def delete_data(self, tab_name: str, table_name: str, record_id: int):
+    def delete_data(self, tab_name: str, table_name: str, record_id: int) -> dict:
         """
         Delete a specific record from a table in the Ragic database.
+
+        Attempt to delete a non-existing record will not raise an error.
 
         Args:
             tab_name (str): The name of the tab containing the table.
@@ -557,13 +667,16 @@ class RagicAPIClient:
         """
         Retrieve a specific record from a table in the Ragic database.
 
+        Attempt to retrieve a non-existing record will not raise an error.
+
         Args:
             tab_name (str): The name of the tab containing the table.
             table_name (str): The name of the table to retrieve data from.
             record_id (int): The ID of the record to retrieve.
 
         Returns:
-            response (dict): The data of the specified record.
+            response (dict):
+            The data of the specified record. Empty dict if not found.
 
         Raises:
             ValueError: If the specified tab or table does not exist.
@@ -589,6 +702,83 @@ class RagicAPIClient:
                 response = client.get(target_url)
                 response.raise_for_status()
                 return response.json()
+        except httpx.RequestError as req_err:
+            logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
+            raise
+        except Exception as err:
+            logging.error(
+                "An unexpected error occurred: %s",
+                err,
+                exc_info=True,
+                stack_info=True,
+            )
+            raise
+
+    def upload_file(
+        self,
+        tab_name: str,
+        table_name: str,
+        record_id: int,
+        field_name: str,
+        file_path: str,
+    ):
+        """
+        Upload a file to a specific record in a table in the Ragic database.
+
+        This method adds a file to a specific field in a record, not replacing the entire field.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to upload data to.
+            record_id (int): The ID of the record to upload the file to.
+            field_name (str): The name of the field where the file will be uploaded.
+            file_path (str): The path to the file to be uploaded.
+
+        Returns:
+            response (dict): The response from the API after uploading the file.
+
+        Raises:
+            ValueError: If the specified tab or table does not exist.
+            ValueError: If the field is not an attachment field.
+            httpx.RequestError: If there is an error with the HTTP request.
+            Exception: For any other unexpected errors.
+            FileExistsError: If the specified file does not exist.
+            IsADirectoryError: If the specified path is a directory instead of a file.
+        """
+        # Validate input parameters
+        if tab_name not in self.structure.get_tabs():
+            raise ValueError(f"Tab {tab_name} not found in structure")
+
+        if table_name not in self.structure.get_tables(tab_name):
+            raise ValueError(f"Table {table_name} not found in tab {tab_name}")
+
+        if not os.path.exists(file_path):
+            raise FileExistsError(f"File {file_path} does not exist")
+
+        if not os.path.isfile(file_path):
+            raise IsADirectoryError(f"Path {file_path} is not a file")
+
+        # Construct the API URL
+        tab_id = self.structure.get_tab_id(tab_name)
+        table_id = self.structure.get_table_id(tab_name, table_name)
+
+        base_url = f"{self.base_url}/{self.namespace}/{tab_id}/{table_id}"
+        target_url = f"{base_url}/{record_id}?api=v={self.version}"
+
+        if (
+            self.structure.get_field_type(tab_name, table_name, field_name)
+            != "attachment"
+        ):
+            raise ValueError(f"Field {field_name} is not an attachment field")
+
+        field_id = self.structure.get_field_id(tab_name, table_name, field_name)
+        try:
+            with httpx.Client(http2=True, headers=self.headers) as client:
+                with open(file_path, "rb") as file:
+                    files = {field_id: file.read()}
+                    response = client.put(target_url, files=files)
+                    response.raise_for_status()
+                    return response.json()
         except httpx.RequestError as req_err:
             logging.error("Request failed: %s", req_err, exc_info=True, stack_info=True)
             raise
