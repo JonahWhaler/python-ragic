@@ -360,6 +360,49 @@ class RagicAPIClient:
         df.to_csv(output_path, index=False)
         return None
 
+    def prepare_payload(self, tab_name: str, table_name: str, data: dict):
+        """
+        Prepare the payload and files for the API request.
+
+        Args:
+            tab_name (str): The name of the tab containing the table.
+            table_name (str): The name of the table to write data to.
+            data (dict): The data to be written to the table.
+
+        Returns:
+            payload (dict): The payload for the API request.
+            files (list): A list of tuples containing file information for attachment fields.
+
+        **Notes**:
+        - Consider blank value (None or empty string) as an intention to clear the field.
+        """
+        payload = {}
+        files = []
+        for field_name, value in data.items():
+            if field_name.startswith("_"):
+                continue
+
+            field_id = self.structure.get_field_id(tab_name, table_name, field_name)
+            field_type = self.structure.get_field_type(tab_name, table_name, field_name)
+            if field_type != "attachment" or value is None or value == "":
+                payload[field_id] = value
+            else:
+                if not isinstance(value, list):
+                    value = [value]
+                for file_path in value:
+                    mime_type, _ = mimetypes.guess_type(file_path)
+                    if mime_type is None:
+                        mime_type = "application/octet-stream"
+                    with open(file_path, "rb") as f:
+                        files.append(
+                            (
+                                field_id,
+                                (os.path.basename(file_path), f.read(), mime_type),
+                            )
+                        )
+
+        return payload, files
+
     def write_new_data(
         self,
         tab_name: str,
