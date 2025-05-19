@@ -463,6 +463,15 @@ class RagicAPIClient:
         """
         Download a file from the Ragic server and save it to the specified output path.
 
+        ## File Not Found:
+
+        - **Image**: If response.content is less than 43 bytes,
+        it indicates that the file identifier is invalid or the file does not exist.
+
+        - **Non-image**:
+        If the system fails to locate the file,
+        "File identifier is invalid or file does not exist" will be raised.
+
         Args:
             file_identifier (str): The identifier of the file to be loaded.
             output_path (str): The path where the file will be saved.
@@ -487,8 +496,13 @@ class RagicAPIClient:
                 base_url = f"{self.base_url}/sims/file.jsp"
                 target_url = f"{base_url}?a={self.namespace}&f={file_identifier}"
                 response = client.get(target_url)
-
                 response.raise_for_status()
+                content_type = response.headers.get("Content-Type", "")
+                content_length = len(response.content)
+                if content_type.startswith("image/") and content_length <= 43:
+                    raise ValueError(
+                        "File identifier is invalid or file does not exist"
+                    )
 
                 with open(output_path, "wb") as f:
                     f.write(response.content)
