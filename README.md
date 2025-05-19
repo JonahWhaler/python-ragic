@@ -17,13 +17,21 @@ This library simplifies making requests to Ragic databases, handling authenticat
   - [Modify Data (single record)](#modify-data-single-record)
   - [Delete Data (single record)](#delete-data-single-record)
   - [Get Data (single record)](#get-data-single-record)
+  - [Upload files](#upload-files)
+  - [Download files](#download-files)
 
 <br />
 
 ## Features
 
 - Easy authentication and connection setup
-- Read data from Ragic databases
+- Read data
+- Write new data
+- Modify existing records
+- Delete records
+- Get single records
+- Upload files
+- Download files
 
 <br />
 
@@ -98,10 +106,12 @@ client = RagicAPIClient(
 TAB_NAME = "Sales Management System"
 TABLE_NAME = "customer"
 
+# For field that takes attachment, provide the file path
+# If more than one file, provide a list of file paths
 data_dict = {
     "Name": "John Doe",
     "Age Group": "41 - 50",
-    "Race": "Chinese
+    "Race": "Chinese,
 }
 
 resp_dict = client.write_new_data(
@@ -132,6 +142,14 @@ client = RagicAPIClient(
 TAB_NAME = "Sales Management System"
 TABLE_NAME = "customer"
 
+# For field that takes attachment, provide the file path
+# If more than one file, provide a list of file paths
+# When modifying a record with an attachment, 
+# it adds a new file instead of replacing the existing one.
+
+# To replace the existing file, set None to the field name, 
+# Take note, this approach deletes all existing files from the field.
+# Call upload_file method to upload the new file.
 data_dict = {
     "Name": "John Doe",
     "Age Group": "41 - 50",
@@ -192,5 +210,53 @@ resp_dict = client.get_data(
     TAB_NAME,
     TABLE_NAME,
     record_id=record_id
+)
+```
+
+## Upload files
+```python
+from ragic import RagicAPIClient
+client = RagicAPIClient(
+    base_url=None,
+    namespace=None,
+    api_key=None,
+    version=3,
+    structure_path="structure.yaml",
+)
+TAB_NAME = "Sales Management System"
+TABLE_NAME = "customer"
+record_id = "<ragicId>"  # Replace with the actual record ID
+
+field_name = "file_upload_field"  # Replace with the actual field name
+file_path = "path/to/your/file.png"  # Replace with the actual file path
+
+resp_dict = client.upload_file(
+    TAB_NAME,
+    TABLE_NAME,
+    record_id=record_id,
+    field_name=field_name,
+    file_path=file_path
+)
+```
+
+## Download files
+```python
+from ragic import RagicAPIClient
+
+client = RagicAPIClient(
+    base_url=None,
+    namespace=None,
+    api_key=None,
+    version=3,
+    structure_path="structure.yaml",
+)
+
+# format xxxxx@filename.file_extension
+file_identifier = "<fileIdentifier>"  # Replace with the actual file identifier
+output_path = "path/to/save/file.png"  # Replace with the desired output path
+
+resp_dict = client.download_file(
+    file_identifier=file_identifier,
+    output_path=output_path
 )
 ```
