@@ -109,9 +109,11 @@ class RagicStructure:
         if field_name in system_fields:
             return system_fields[field_name]
 
-        return self.__structure["tabs"][tab_name]["tables"][table_name]["fields"][
-            field_name
-        ]["field_id"]
+        return str(
+            self.__structure["tabs"][tab_name]["tables"][table_name]["fields"][
+                field_name
+            ]["field_id"]
+        )
 
     def get_field_type(self, tab_name: str, table_name: str, field_name: str) -> str:
         """
