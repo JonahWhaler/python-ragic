@@ -459,9 +459,9 @@ class RagicAPIClient:
             )
             raise
 
-    def load_file(self, file_identifier: str, output_path: str) -> None:
+    def download_file(self, file_identifier: str, output_path: str) -> None:
         """
-        Load a file from the Ragic server and save it to the specified output path.
+        Download a file from the Ragic server and save it to the specified output path.
 
         Args:
             file_identifier (str): The identifier of the file to be loaded.
