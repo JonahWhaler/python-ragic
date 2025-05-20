@@ -44,7 +44,6 @@ class RagicAPIClient:
         base_url: Optional[str],
         namespace: Optional[str],
         api_key: Optional[str],
-        account: Optional[str],
         version: int,
         structure_path: str,
     ):
@@ -72,8 +71,6 @@ class RagicAPIClient:
             namespace = os.getenv("RAGIC_NAMESPACE")
         if api_key is None:
             api_key = os.getenv("RAGIC_API_KEY")
-        if account is None:
-            account = os.getenv("RAGIC_ACCOUNT")
 
         if base_url is None or namespace is None or api_key is None:
             raise ValueError("RAGIC_URL, RAGIC_NAMESPACE and RAGIC_API_KEY must be set")
@@ -81,7 +78,6 @@ class RagicAPIClient:
         self.base_url = base_url
         self.namespace = namespace
         self.api_key = api_key
-        self.account = account
         self.version = version
         self.structure: RagicStructure = RagicStructure(structure_path)
 
