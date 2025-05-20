@@ -5,7 +5,7 @@ DESCRIPTION = "Python Ragic API client for data loading and manipulation."
 # python3 setup.py sdist bdist_wheel
 # twine upload --skip-existing dist/* --verbose
 
-VERSION = "0.3.1"
+VERSION = "0.3.2"
 
 with open("./README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
